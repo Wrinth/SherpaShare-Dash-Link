@@ -1,164 +1,44 @@
 # SherpaShare-Dash-Link
 A project build on Arduino to connect with an Android device via Bluetooth
 
-While tranfer the following character to the arduino divice via bluetooth, it will perform the following action:
-0 => Turn both led 1 and led 2 off
-1 => Turn led 1 on and led 2 off
-2 => Turn led 1 off and led 2 on
-3 => Turn both led 1 and led 2 on
-b => blink
-In addition, the arduino will also send these characters to the Android vie Bluetooth if user presses the button.
-
-
-
-In order to use bluetooth to connect an arduino and an android device, the android programmer(s) has/have to follow the following step:
-1) Declare the Bluetooth permission(s) in your application manifest file. For example:
-<manifest ... >
-  <uses-permission android:name="android.permission.BLUETOOTH" />
-  ...
-</manifest>
-
-2) Setting Up Bluetooth using the BluetoothAdapter Object. 
-Enter this code:
-BluetoothAdapter mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
-if (mBluetoothAdapter == null) {
-    // Device does not support Bluetooth
-}
-
-3) Enable the bluetooth programatically:
-if (!mBluetoothAdapter.isEnabled()) {
-    Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
-    startActivityForResult(enableBtIntent, REQUEST_ENABLE_BT);
-}
-
-4) Querying paired devices
-Set<BluetoothDevice> pairedDevices = mBluetoothAdapter.getBondedDevices();
-// If there are paired devices
-if (pairedDevices.size() > 0) {
-    // Loop through paired devices
-    for (BluetoothDevice device : pairedDevices) {
-        // Add the name and address to an array adapter to show in a ListView
-        mArrayAdapter.add(device.getName() + "\n" + device.getAddress());
-    }
-}
-
-5) Discovering devices
-// Create a BroadcastReceiver for ACTION_FOUND
-private final BroadcastReceiver mReceiver = new BroadcastReceiver() {
-    public void onReceive(Context context, Intent intent) {
-        String action = intent.getAction();
-        // When discovery finds a device
-        if (BluetoothDevice.ACTION_FOUND.equals(action)) {
-            // Get the BluetoothDevice object from the Intent
-            BluetoothDevice device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
-            // Add the name and address to an array adapter to show in a ListView
-            mArrayAdapter.add(device.getName() + "\n" + device.getAddress());
-        }
-    }
-};
-// Register the BroadcastReceiver
-IntentFilter filter = new IntentFilter(BluetoothDevice.ACTION_FOUND);
-registerReceiver(mReceiver, filter); // Don't forget to unregister during onDestroy
-
-6) Connecting as a server
-private class AcceptThread extends Thread {
-    private final BluetoothServerSocket mmServerSocket;
- 
-    public AcceptThread() {
-        // Use a temporary object that is later assigned to mmServerSocket,
-        // because mmServerSocket is final
-        BluetoothServerSocket tmp = null;
-        try {
-            // MY_UUID is the app's UUID string, also used by the client code
-            tmp = mBluetoothAdapter.listenUsingRfcommWithServiceRecord(NAME, MY_UUID);
-        } catch (IOException e) { }
-        mmServerSocket = tmp;
-    }
- 
-    public void run() {
-        BluetoothSocket socket = null;
-        // Keep listening until exception occurs or a socket is returned
-        while (true) {
-            try {
-                socket = mmServerSocket.accept();
-            } catch (IOException e) {
-                break;
-            }
-            // If a connection was accepted
-            if (socket != null) {
-                // Do work to manage the connection (in a separate thread)
-                manageConnectedSocket(socket);
-                mmServerSocket.close();
-                break;
-            }
-        }
-    }
- 
-    /** Will cancel the listening socket, and cause the thread to finish */
-    public void cancel() {
-        try {
-            mmServerSocket.close();
-        } catch (IOException e) { }
-    }
-}
-
-7) Get the InputStream and OutputStream that handle transmissions.
-
-   When you have successfully connected the two devices, each one will have a connected BluetoothSocket. Using the BluetoothSocket, the general procedure to transfer arbitrary data is simple:
-
-   Get the InputStream and OutputStream that handle transmissions through the socket, via getInputStream() and getOutputStream(), respectively.
-
-Example:
-private class ConnectedThread extends Thread {
-    private final BluetoothSocket mmSocket;
-    private final InputStream mmInStream;
-    private final OutputStream mmOutStream;
- 
-    public ConnectedThread(BluetoothSocket socket) {
-        mmSocket = socket;
-        InputStream tmpIn = null;
-        OutputStream tmpOut = null;
- 
-        // Get the input and output streams, using temp objects because
-        // member streams are final
-        try {
-            tmpIn = socket.getInputStream();
-            tmpOut = socket.getOutputStream();
-        } catch (IOException e) { }
- 
-        mmInStream = tmpIn;
-        mmOutStream = tmpOut;
-    }
- 
-    public void run() {
-        byte[] buffer = new byte[1024];  // buffer store for the stream
-        int bytes; // bytes returned from read()
- 
-        // Keep listening to the InputStream until an exception occurs
-        while (true) {
-            try {
-                // Read from the InputStream
-                bytes = mmInStream.read(buffer);
-                // Send the obtained bytes to the UI activity
-                mHandler.obtainMessage(MESSAGE_READ, bytes, -1, buffer)
-                        .sendToTarget();
-            } catch (IOException e) {
-                break;
-            }
-        }
-    }
- 
-    /* Call this from the main activity to send data to the remote device */
-    public void write(byte[] bytes) {
-        try {
-            mmOutStream.write(bytes);
-        } catch (IOException e) { }
-    }
- 
-    /* Call this from the main activity to shutdown the connection */
-    public void cancel() {
-        try {
-            mmSocket.close();
-        } catch (IOException e) { }
-    }
-}
+Background
+SherpaShare wants a simple hardware workers can carry with them to track their work with their
+smart phone. The hardware should be small, light, easy to attach to some surface, long battery life
+and stable connection to the smartphone.
+Use Case
+Uber Driver Bob puts the SherpaShare Dash Link on his car, pair with SherpaShare mobile app.
+When Bob picks up a customer, he clicks the button to start to track the ride. After he drops off the
+pax, he clicks the button again to end the tracking. When he leaves the car, the link will disconnect
+with the smart phone. When he goes back into the car, the link shall auto connect with the phone
+and indicates it is connect (phone beep or device beeps).
+Doordash Deliverer John carries the SherpaShare Dash Link with his car key. When he got the
+order from Doordash and hit the road, he clicks the button to track his work. After he delivered the
+food, he will click the button to stop the tracking.
+Spec
+The dash link shall be small ( similar size like the amazon dash button or even smaller: width
+10MM, length 30MM, thinness 10MM). It shall have one giant button to handle all the connection
+and actions. There shall be two lights, one is to indicate whether the link still function (has battery).
+The other lights to indicate the status of the device or flow. The device shall also has a speaker
+with different sounds for different state of the device. The device supports pairing with smartphone
+via BlueTooth. The device shall has built­in battery to support long life (or large number of usage).
+The device shall have two lights. One light for tracking and the other for pairing. When it's tracking
+the light is green, when it's not tracking the light is turned off. Long press to pair, and the light will
+flash blue. If the battery is low, when it's tracking, instead of green, it can be yellow/red indicating
+battery is low. Every time you get in the car, if it automatically repairs, the light should also blink
+blue. The device has different sound for pairing, turn on, and turn off, if battery is low, when it
+turns on, it can also say something like 'battery low'.
+Device States:
+1. Shutdown
+2. Standby
+3. Pairing
+4. Paired
+5. Tracking ON
+6. Tracking OFF
+Here is the basic state machine I am thinking, it might not be comprehensive.
+Consideration
+The device shall be very intuitive to use. It shall have long life and very stable connection quality.
+The button shall be easy to press.
+Things need to evaluate:
+1. Whether the battery shall be replaceable (if not, how long it can last, how expense to
+make)
+2. Whether the One button or Two button (one is ON, the other is OFF)?
