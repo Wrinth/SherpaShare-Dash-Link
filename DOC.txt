@@ -1,0 +1,161 @@
+While tranfer the following character to the arduino divice via bluetooth, it will perform the following action:
+0 => Turn both led 1 and led 2 off
+1 => Turn led 1 on and led 2 off
+2 => Turn led 1 off and led 2 on
+3 => Turn both led 1 and led 2 on
+b => blink
+In addition, the arduino will also send these characters to the Android vie Bluetooth if user presses the button.
+
+
+
+In order to use bluetooth to connect an arduino and an android device, the android programmer(s) has/have to follow the following step:
+1) Declare the Bluetooth permission(s) in your application manifest file. For example:
+<manifest ... >
+  <uses-permission android:name="android.permission.BLUETOOTH" />
+  ...
+</manifest>
+
+2) Setting Up Bluetooth using the BluetoothAdapter Object. 
+Enter this code:
+BluetoothAdapter mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
+if (mBluetoothAdapter == null) {
+    // Device does not support Bluetooth
+}
+
+3) Enable the bluetooth programatically:
+if (!mBluetoothAdapter.isEnabled()) {
+    Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
+    startActivityForResult(enableBtIntent, REQUEST_ENABLE_BT);
+}
+
+4) Querying paired devices
+Set<BluetoothDevice> pairedDevices = mBluetoothAdapter.getBondedDevices();
+// If there are paired devices
+if (pairedDevices.size() > 0) {
+    // Loop through paired devices
+    for (BluetoothDevice device : pairedDevices) {
+        // Add the name and address to an array adapter to show in a ListView
+        mArrayAdapter.add(device.getName() + "\n" + device.getAddress());
+    }
+}
+
+5) Discovering devices
+// Create a BroadcastReceiver for ACTION_FOUND
+private final BroadcastReceiver mReceiver = new BroadcastReceiver() {
+    public void onReceive(Context context, Intent intent) {
+        String action = intent.getAction();
+        // When discovery finds a device
+        if (BluetoothDevice.ACTION_FOUND.equals(action)) {
+            // Get the BluetoothDevice object from the Intent
+            BluetoothDevice device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
+            // Add the name and address to an array adapter to show in a ListView
+            mArrayAdapter.add(device.getName() + "\n" + device.getAddress());
+        }
+    }
+};
+// Register the BroadcastReceiver
+IntentFilter filter = new IntentFilter(BluetoothDevice.ACTION_FOUND);
+registerReceiver(mReceiver, filter); // Don't forget to unregister during onDestroy
+
+6) Connecting as a server
+private class AcceptThread extends Thread {
+    private final BluetoothServerSocket mmServerSocket;
+ 
+    public AcceptThread() {
+        // Use a temporary object that is later assigned to mmServerSocket,
+        // because mmServerSocket is final
+        BluetoothServerSocket tmp = null;
+        try {
+            // MY_UUID is the app's UUID string, also used by the client code
+            tmp = mBluetoothAdapter.listenUsingRfcommWithServiceRecord(NAME, MY_UUID);
+        } catch (IOException e) { }
+        mmServerSocket = tmp;
+    }
+ 
+    public void run() {
+        BluetoothSocket socket = null;
+        // Keep listening until exception occurs or a socket is returned
+        while (true) {
+            try {
+                socket = mmServerSocket.accept();
+            } catch (IOException e) {
+                break;
+            }
+            // If a connection was accepted
+            if (socket != null) {
+                // Do work to manage the connection (in a separate thread)
+                manageConnectedSocket(socket);
+                mmServerSocket.close();
+                break;
+            }
+        }
+    }
+ 
+    /** Will cancel the listening socket, and cause the thread to finish */
+    public void cancel() {
+        try {
+            mmServerSocket.close();
+        } catch (IOException e) { }
+    }
+}
+
+7) Get the InputStream and OutputStream that handle transmissions.
+
+   When you have successfully connected the two devices, each one will have a connected BluetoothSocket. Using the BluetoothSocket, the general procedure to transfer arbitrary data is simple:
+
+   Get the InputStream and OutputStream that handle transmissions through the socket, via getInputStream() and getOutputStream(), respectively.
+
+Example:
+private class ConnectedThread extends Thread {
+    private final BluetoothSocket mmSocket;
+    private final InputStream mmInStream;
+    private final OutputStream mmOutStream;
+ 
+    public ConnectedThread(BluetoothSocket socket) {
+        mmSocket = socket;
+        InputStream tmpIn = null;
+        OutputStream tmpOut = null;
+ 
+        // Get the input and output streams, using temp objects because
+        // member streams are final
+        try {
+            tmpIn = socket.getInputStream();
+            tmpOut = socket.getOutputStream();
+        } catch (IOException e) { }
+ 
+        mmInStream = tmpIn;
+        mmOutStream = tmpOut;
+    }
+ 
+    public void run() {
+        byte[] buffer = new byte[1024];  // buffer store for the stream
+        int bytes; // bytes returned from read()
+ 
+        // Keep listening to the InputStream until an exception occurs
+        while (true) {
+            try {
+                // Read from the InputStream
+                bytes = mmInStream.read(buffer);
+                // Send the obtained bytes to the UI activity
+                mHandler.obtainMessage(MESSAGE_READ, bytes, -1, buffer)
+                        .sendToTarget();
+            } catch (IOException e) {
+                break;
+            }
+        }
+    }
+ 
+    /* Call this from the main activity to send data to the remote device */
+    public void write(byte[] bytes) {
+        try {
+            mmOutStream.write(bytes);
+        } catch (IOException e) { }
+    }
+ 
+    /* Call this from the main activity to shutdown the connection */
+    public void cancel() {
+        try {
+            mmSocket.close();
+        } catch (IOException e) { }
+    }
+}
